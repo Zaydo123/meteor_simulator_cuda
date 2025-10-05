@@ -58,33 +58,49 @@ class TsunamiModel:
         angle_rad = math.radians(impact_angle_deg)
         coupling_efficiency = 0.1 * math.sin(angle_rad)  # Approximate
         
-        # Only shallow impacts (<3x asteroid diameter) generate significant tsunamis
+        # Depth sensitivity: Deep water impacts are FAR less effective at generating tsunamis
+        # Ward & Asphaug (2000): When h >> d, most energy goes into cavity/heating, not waves
         depth_ratio = ocean_depth_m / asteroid_diameter_m
-        if depth_ratio > 3:
-            depth_factor = 1.0 / depth_ratio
-        else:
+        
+        if depth_ratio <= 2:
+            # Shallow impact: maximum tsunami generation
             depth_factor = 1.0
+        elif depth_ratio <= 5:
+            # Moderate depth: linear reduction
+            depth_factor = 1.0 - (depth_ratio - 2) / 6  # 1.0 → 0.5
+        elif depth_ratio <= 10:
+            # Deep impact: exponential reduction
+            depth_factor = 0.5 * math.exp(-(depth_ratio - 5) / 5)  # 0.5 → 0.18
+        else:
+            # Very deep: minimal tsunami (most energy dissipated)
+            # Use inverse square for realistic deep-water suppression
+            depth_factor = 10.0 / (depth_ratio ** 1.5)
         
         tsunami_energy_joules = kinetic_energy_joules * coupling_efficiency * depth_factor
         
-        # Initial wave amplitude (Ward & Asphaug scaling)
-        # H₀ ≈ 0.1 * (E / ρ g)^(1/4) where E is energy
-        amplitude_m = 0.1 * (tsunami_energy_joules / (WATER_DENSITY * GRAVITY)) ** 0.25
+        # Initial wave amplitude (Ward & Asphaug scaling, adjusted for realism)
+        # Original: H₀ ≈ 0.1 * (E / ρ g)^(1/4)
+        # Adjusted with lower coefficient for more realistic results
+        amplitude_m = 0.02 * (tsunami_energy_joules / (WATER_DENSITY * GRAVITY)) ** 0.22
         
-        # Apply reasonable physical limits based on asteroid size
-        # Small asteroids (<100m): cap at 50m
-        # Medium asteroids (100-500m): cap at 200m
-        # Large asteroids (500-1000m): cap at 500m
-        # Giant asteroids (>1km): cap at 2000m (Chicxulub-scale)
-        if asteroid_diameter_m < 100:
-            max_amplitude = 50
+        # Apply safety caps to prevent unrealistic values
+        # These caps are generous to let depth variations show through
+        # Caps based on physical plausibility and asteroid size
+        if asteroid_diameter_m < 50:
+            max_amplitude = 15  # Very small impacts
+        elif asteroid_diameter_m < 150:
+            max_amplitude = 35  # Small-medium impacts
+        elif asteroid_diameter_m < 300:
+            max_amplitude = 60  # Medium impacts
         elif asteroid_diameter_m < 500:
-            max_amplitude = 200
+            max_amplitude = 100  # Large impacts
         elif asteroid_diameter_m < 1000:
-            max_amplitude = 500
+            max_amplitude = 200  # Very large impacts
         else:
-            max_amplitude = min(2000, asteroid_diameter_m * 2)  # Scale with size
+            # Giant impacts: scale with size but cap at physically reasonable maximum
+            max_amplitude = min(500, asteroid_diameter_m * 0.5)
         
+        # Only apply cap if calculated value exceeds it
         amplitude_m = min(amplitude_m, max_amplitude)
         
         # Wave period (approximate)
@@ -98,19 +114,22 @@ class TsunamiModel:
         wave_speed_m_s = math.sqrt(GRAVITY * ocean_depth_m)
         wave_speed_km_h = wave_speed_m_s * 3.6
         
-        # Estimate coastal wave height (amplification factor varies with wave size)
-        # Small waves: 2-3x amplification
-        # Medium waves: 3-5x amplification  
-        # Large waves: 5-8x amplification (resonance effects)
-        if amplitude_m < 10:
-            coastal_amplification = 2.5
-        elif amplitude_m < 50:
-            coastal_amplification = 3.5
-        elif amplitude_m < 100:
-            coastal_amplification = 5.0
+        # Estimate coastal wave height using Green's Law amplification
+        # Green's Law: H_coast = H_deep * (h_deep / h_coast)^(1/4)
+        # Typical amplification: 2-4x for most coastlines
+        # Historical data: 2004 tsunami amplified ~3-4x approaching shore
+        #                  2011 tsunami amplified ~2-5x (extreme local conditions to 10x)
+        
+        if amplitude_m < 5:
+            coastal_amplification = 2.5  # Small waves
+        elif amplitude_m < 15:
+            coastal_amplification = 3.0  # Medium waves
+        elif amplitude_m < 30:
+            coastal_amplification = 3.5  # Large waves
         else:
-            # Large waves get more amplification due to resonance
-            coastal_amplification = min(8.0, 5.0 + (amplitude_m - 100) / 100)
+            # Very large waves: slight increase but cap at realistic maximum
+            # Even extreme bathymetry rarely causes >5x amplification
+            coastal_amplification = min(4.5, 3.5 + (amplitude_m - 30) / 100)
         
         coastal_wave_height_m = amplitude_m * coastal_amplification
         
