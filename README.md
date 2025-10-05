@@ -448,8 +448,7 @@ Users must comply with attribution requirements for GEBCO and WorldPop when publ
 
 **NASA Space Apps Challenge 2025**
 
-- Project Team: [Your Team Name]
-- Email: [your-email@example.com]
+- Zayd Alzein, Zaid Khayyat, Khalid Mufti, Kareem Muftee
 - Challenge: Meteor Madness
 
 ---
